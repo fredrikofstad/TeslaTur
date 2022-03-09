@@ -4,7 +4,6 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -40,7 +39,7 @@ class TimesActivity : AppCompatActivity() {
                 val tvName: TextView = holder.itemView.findViewById(android.R.id.text1)
                 val tvDate: TextView = holder.itemView.findViewById(android.R.id.text2)
                 tvName.text = model.displayName
-                tvDate.text = model.timestamp.toString()
+                tvDate.text = model.timestamp.toDate().toString()
             }
         }
         rvTur.adapter = adapter
