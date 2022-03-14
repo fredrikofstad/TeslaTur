@@ -1,22 +1,22 @@
 package com.fredrikofstad.teslatur
 
+import android.content.DialogInterface
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
-import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
-import android.view.ViewGroup
 import android.widget.Button
-import android.widget.TextView
-import com.firebase.ui.firestore.FirestoreRecyclerAdapter
-import com.firebase.ui.firestore.FirestoreRecyclerOptions
-import com.google.android.gms.common.SignInButton
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.ktx.Firebase
+import java.text.SimpleDateFormat
 
 class MainActivity : AppCompatActivity() {
 
@@ -28,6 +28,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var auth: FirebaseAuth
     private lateinit var btnTimes: Button
+    private lateinit var btnDepart: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,32 +37,35 @@ class MainActivity : AppCompatActivity() {
         auth = Firebase.auth
         //UI elements
         btnTimes = findViewById(R.id.btnTime)
+        btnDepart = findViewById(R.id.btnDepart)
         // go to times
         val timesIntent = Intent(this, TimesActivity::class.java)
         btnTimes.setOnClickListener(){
             startActivity(timesIntent)
         }
-    }
-
-    fun onLatestListener(){
-        val query = db.collection("times")
-        val options = FirestoreRecyclerOptions.Builder<Tur>().setQuery(query, Tur::class.java)
-            .setLifecycleOwner(this).build() // set activity as the query's lifetime
-        val adapter = object: FirestoreRecyclerAdapter<Tur, TurViewHolder>(options){
-            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TurViewHolder {
-                // can customize layout later
-                val view = LayoutInflater.from(this@MainActivity)
-                    .inflate(android.R.layout.simple_list_item_2, parent, false)
-                return TurViewHolder(view)
+        btnDepart.setOnClickListener(){
+            showAlertDialog()
+        }
+        // listener for change in document
+        val docTeslaTime = db.collection("tesla").document("tur")
+        docTeslaTime.addSnapshotListener { snapshot, e ->
+            if (e != null) {
+                Log.w(TAG, "Listen failed.", e)
+                return@addSnapshotListener
             }
+            if (snapshot != null && snapshot.exists()) {
+                Log.d(TAG, "Current data: ${snapshot.data}")
+                val dateFormat = SimpleDateFormat("hh:mm")
+                val sistUte = snapshot.getDate("sistUte")
+                //val sistUte = snapshot.toObject<SistUte>()?.timestamp?.toDate()
+                btnTimes.text = dateFormat.format(sistUte)
 
-            override fun onBindViewHolder(holder: TurViewHolder, position: Int, model: Tur) {
-                val tvName: TextView = holder.itemView.findViewById(android.R.id.text1)
-                val tvDate: TextView = holder.itemView.findViewById(android.R.id.text2)
-                tvName.text = model.displayName
-                tvDate.text = model.timestamp.toDate().toString()
+            } else {
+                Log.d(TAG, "Current data: null")
             }
         }
+
+
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -81,6 +85,37 @@ class MainActivity : AppCompatActivity() {
 
         }
         return super.onOptionsItemSelected(item)
+    }
+    private fun alreadyGone(): Boolean{
+        //tests if tesla needs to go on a trip
+        return false
+    }
+
+    private fun showAlertDialog(){
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Tessetur")
+            .setMessage(
+                if(alreadyGone()){
+                    "Tesla har allerede gått på tur, men vil alltid gå flere ganger!"
+                } else {
+                    "Er du klar for tessetur?"
+                })
+            .setPositiveButton("Aldri sur!", null)
+            .setNegativeButton("Bare kødda", null)
+            .show()
+        dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener{
+            Log.i(TAG, "Går ut med tess")
+            val currentuser = auth.currentUser
+            if(currentuser == null){
+                Toast.makeText(this, "Ingen bruker pålogget",Toast.LENGTH_SHORT)
+                return@setOnClickListener
+            }
+            // edit firestore document with time right now
+            db.collection("tesla").document("tur").update("sistUte", Timestamp.now())
+            // TODO: add document for who did what and when
+            dialog.dismiss()
+        }
+
     }
 
 }
