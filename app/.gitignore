@@ -2,3 +2,4 @@
 /src/androidTest/
 /src/test/
 google-services.json
+/src/main/java/com/fredrikofstad/teslatur/Constants.kt
