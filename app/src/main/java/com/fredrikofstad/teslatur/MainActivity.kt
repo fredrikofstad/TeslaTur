@@ -16,15 +16,22 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.ktx.Firebase
+import com.google.gson.Gson
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 
 class MainActivity : AppCompatActivity() {
 
     private companion object{
         private const val TAG = "MainActivity"
+        private const val TIME_LIMIT_SECONDS = 4*60*60 // 4 hours
+        private const val SUBSCRIBED = "/subsribed"
     }
 
     val db = Firebase.firestore
+
 
     private lateinit var auth: FirebaseAuth
     private lateinit var btnTimes: Button
@@ -35,17 +42,14 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         // Initialize Firebase Auth
         auth = Firebase.auth
+        // intents
+        val timesIntent = Intent(this, TimesActivity::class.java)
         //UI elements
         btnTimes = findViewById(R.id.btnTime)
         btnDepart = findViewById(R.id.btnDepart)
-        // go to times
-        val timesIntent = Intent(this, TimesActivity::class.java)
-        btnTimes.setOnClickListener(){
-            startActivity(timesIntent)
-        }
-        btnDepart.setOnClickListener(){
-            showAlertDialog()
-        }
+        //set onclick listeners
+        btnTimes.setOnClickListener { startActivity(timesIntent) }
+        btnDepart.setOnClickListener { showAlertDialog() }
         // listener for change in document
         val docTeslaTime = db.collection("tesla").document("tur")
         docTeslaTime.addSnapshotListener { snapshot, e ->
@@ -55,24 +59,50 @@ class MainActivity : AppCompatActivity() {
             }
             if (snapshot != null && snapshot.exists()) {
                 Log.d(TAG, "Current data: ${snapshot.data}")
-                val dateFormat = SimpleDateFormat("hh:mm")
+                val dateFormat = SimpleDateFormat("K:mm")
                 val sistUte = snapshot.getDate("sistUte")
-                //val sistUte = snapshot.toObject<SistUte>()?.timestamp?.toDate()
                 btnTimes.text = dateFormat.format(sistUte)
 
             } else {
                 Log.d(TAG, "Current data: null")
             }
         }
-
-
     }
 
+    //notification coroutine
+    private fun sendNotifications(notification: PushNotification) = CoroutineScope(Dispatchers.IO).launch{
+        try{
+            val response = RetrofitInstance.api.pushNotification(notification)
+            if(response.isSuccessful){
+                // need gson to deserialize response
+                Log.d(TAG, "Response: ${Gson().toJson(response)}")
+            } else {
+                Log.e(TAG, response.errorBody().toString())
+            }
+        }catch(e: Exception){
+            Log.e(TAG, e.toString())
+        }
+    }
+    // creating notification
+    private fun createNotification(){
+        //probably bad practice to hardcode text
+        val title = "test"
+        val message = "test2"
+        PushNotification(
+            NotificationData(title, message),
+            SUBSCRIBED
+        ).also{
+            sendNotifications(it)
+        }
+    }
+
+
+    //menu bar
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
         return true
     }
-
+    // logging out
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if(item.itemId == R.id.miLogout){
             Log.i(TAG,"User logged out.")
@@ -86,8 +116,10 @@ class MainActivity : AppCompatActivity() {
         }
         return super.onOptionsItemSelected(item)
     }
+
     private fun alreadyGone(): Boolean{
         //tests if tesla needs to go on a trip
+        //TODO: return bool if time is less than an hour after previous trip
         return false
     }
 
